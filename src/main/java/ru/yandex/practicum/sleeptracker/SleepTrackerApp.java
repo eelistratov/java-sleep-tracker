@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -15,7 +16,6 @@ import java.util.stream.Collectors;
 
 public class SleepTrackerApp {
 
-    // Формат даты в файле: 01.10.25 22:15
     private static final DateTimeFormatter DATE_FORMATTER =
             DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
 
@@ -109,7 +109,7 @@ public class SleepTrackerApp {
 
             return new SleepingSession(start, end, quality);
 
-        } catch (java.time.format.DateTimeParseException e) {
+        } catch (DateTimeParseException e) {
             throw new IllegalArgumentException(
                     "Ошибка парсинга даты в строке: " + line, e
             );
