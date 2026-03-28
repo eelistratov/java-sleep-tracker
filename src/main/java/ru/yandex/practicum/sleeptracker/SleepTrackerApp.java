@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class SleepTrackerApp {
 
@@ -39,11 +40,9 @@ public class SleepTrackerApp {
 
     // Запускает все анализаторы на переданных данных
     public List<SleepAnalysisResult> runAnalysis(List<SleepingSession> sessions) {
-        List<SleepAnalysisResult> results = new ArrayList<>();
-        for (SleepAnalyzer analyzer : analyzers) {
-            results.add(analyzer.analyze(sessions));
-        }
-        return results;
+        return analyzers.stream()
+                .map(analyzer -> analyzer.analyze(sessions))
+                .collect(Collectors.toList());
     }
 
     public static void main(String[] args) {
@@ -73,9 +72,7 @@ public class SleepTrackerApp {
             System.out.println("Всего обработано сессий: " + sessions.size());
             System.out.println();
 
-            for (SleepAnalysisResult result : results) {
-                System.out.println(result);
-            }
+            results.forEach(System.out::println);
 
         } catch (IOException e) {
             System.err.println("Ошибка при чтении файла: " + e.getMessage());
@@ -88,14 +85,10 @@ public class SleepTrackerApp {
 
     // Читает файл и преобразует каждую строку в объект SleepingSession
     private static List<SleepingSession> loadSessionsFromFile(String filePath) throws IOException {
-        List<String> lines = Files.readAllLines(Path.of(filePath));
-        List<SleepingSession> sessions = new ArrayList<>();
-        for (String line : lines) {
-            if (line != null && !line.isBlank()) {
-                sessions.add(parseSession(line));
-            }
-        }
-        return sessions;
+        return Files.readAllLines(Path.of(filePath)).stream()
+                .filter(line -> line != null && !line.isBlank())
+                .map(SleepTrackerApp::parseSession)
+                .collect(Collectors.toList());
     }
 
     private static SleepingSession parseSession(String line) {
@@ -130,13 +123,11 @@ public class SleepTrackerApp {
 
     // Анализаторы
 
-
     // Подсчёт общего количества сессий сна
     static class TotalSessionsAnalyzer implements SleepAnalyzer {
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long count = sessions.size();
-            return new SleepAnalysisResult("Общее количество сессий сна", count);
+            return new SleepAnalysisResult("Общее количество сессий сна", (long) sessions.size());
         }
     }
 
@@ -144,16 +135,11 @@ public class SleepTrackerApp {
     static class MinDurationAnalyzer implements SleepAnalyzer {
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long minMinutes = Long.MAX_VALUE;
-            for (SleepingSession session : sessions) {
-                long duration = session.getDurationMinutes();
-                if (duration < minMinutes) {
-                    minMinutes = duration;
-                }
-            }
-            if (minMinutes == Long.MAX_VALUE) {
-                minMinutes = 0;
-            }
+            long minMinutes = sessions.stream()
+                    .mapToLong(SleepingSession::getDurationMinutes)
+                    .min()
+                    .orElse(0);
+
             long hours = minMinutes / 60;
             long minutes = minMinutes % 60;
             String formatted = hours + " ч " + minutes + " мин";
@@ -165,13 +151,11 @@ public class SleepTrackerApp {
     static class MaxDurationAnalyzer implements SleepAnalyzer {
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long maxMinutes = 0;
-            for (SleepingSession session : sessions) {
-                long duration = session.getDurationMinutes();
-                if (duration > maxMinutes) {
-                    maxMinutes = duration;
-                }
-            }
+            long maxMinutes = sessions.stream()
+                    .mapToLong(SleepingSession::getDurationMinutes)
+                    .max()
+                    .orElse(0);
+
             long hours = maxMinutes / 60;
             long minutes = maxMinutes % 60;
             String formatted = hours + " ч " + minutes + " мин";
@@ -183,11 +167,11 @@ public class SleepTrackerApp {
     static class AverageDurationAnalyzer implements SleepAnalyzer {
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long totalMinutes = 0;
-            for (SleepingSession session : sessions) {
-                totalMinutes += session.getDurationMinutes();
-            }
-            double avgMinutes = sessions.isEmpty() ? 0.0 : (double) totalMinutes / sessions.size();
+            double avgMinutes = sessions.stream()
+                    .mapToLong(SleepingSession::getDurationMinutes)
+                    .average()
+                    .orElse(0.0);
+
             long avgHours = (long) avgMinutes / 60;
             long avgMinutesRemainder = (long) avgMinutes % 60;
             String formatted = avgHours + " ч " + avgMinutesRemainder + " мин";
@@ -199,12 +183,10 @@ public class SleepTrackerApp {
     static class BadQualitySessionsAnalyzer implements SleepAnalyzer {
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long count = 0;
-            for (SleepingSession session : sessions) {
-                if (session.getQuality() == SleepQuality.BAD) {
-                    count++;
-                }
-            }
+            long count = sessions.stream()
+                    .filter(session -> session.getQuality() == SleepQuality.BAD)
+                    .count();
+
             return new SleepAnalysisResult("Количество сессий с плохим качеством сна (BAD)", count);
         }
     }
@@ -213,19 +195,17 @@ public class SleepTrackerApp {
     static class QualityDistributionAnalyzer implements SleepAnalyzer {
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long goodCount = 0;
-            long normalCount = 0;
-            long badCount = 0;
+            long goodCount = sessions.stream()
+                    .filter(session -> session.getQuality() == SleepQuality.GOOD)
+                    .count();
 
-            for (SleepingSession session : sessions) {
-                if (session.getQuality() == SleepQuality.GOOD) {
-                    goodCount++;
-                } else if (session.getQuality() == SleepQuality.NORMAL) {
-                    normalCount++;
-                } else if (session.getQuality() == SleepQuality.BAD) {
-                    badCount++;
-                }
-            }
+            long normalCount = sessions.stream()
+                    .filter(session -> session.getQuality() == SleepQuality.NORMAL)
+                    .count();
+
+            long badCount = sessions.stream()
+                    .filter(session -> session.getQuality() == SleepQuality.BAD)
+                    .count();
 
             String result = "GOOD: " + goodCount + ", NORMAL: " + normalCount + ", BAD: " + badCount;
             return new SleepAnalysisResult("Распределение по качеству сна", result);
@@ -236,13 +216,13 @@ public class SleepTrackerApp {
     static class DaytimeSessionsAnalyzer implements SleepAnalyzer {
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long count = 0;
-            for (SleepingSession session : sessions) {
-                int hour = session.getStartDateTime().getHour();
-                if (hour >= 6 && hour <= 20) {
-                    count++;
-                }
-            }
+            long count = sessions.stream()
+                    .filter(session -> {
+                        int hour = session.getStartDateTime().getHour();
+                        return hour >= 6 && hour <= 20;
+                    })
+                    .count();
+
             return new SleepAnalysisResult("Количество дневных сессий сна", count);
         }
     }
@@ -250,14 +230,13 @@ public class SleepTrackerApp {
     // Количество сессий с недостаточным сном (менее 7 часов)
     static class ShortSleepAnalyzer implements SleepAnalyzer {
         private static final long MIN_RECOMMENDED_MINUTES = 7 * 60; // 7 часов в минутах
+
         @Override
         public SleepAnalysisResult analyze(List<SleepingSession> sessions) {
-            long count = 0;
-            for (SleepingSession session : sessions) {
-                if (session.getDurationMinutes() < MIN_RECOMMENDED_MINUTES) {
-                    count++;
-                }
-            }
+            long count = sessions.stream()
+                    .filter(session -> session.getDurationMinutes() < MIN_RECOMMENDED_MINUTES)
+                    .count();
+
             return new SleepAnalysisResult("Количество сессий с недостаточным сном (<7 ч)", count);
         }
     }
@@ -274,35 +253,26 @@ public class SleepTrackerApp {
                 return new SleepAnalysisResult("Количество бессонных ночей", 0);
             }
 
-            SleepingSession firstSession = sessions.get(0);
-            SleepingSession lastSession = sessions.get(0);
+            SleepingSession firstSession = sessions.stream()
+                    .min((s1, s2) -> s1.getStartDateTime().compareTo(s2.getStartDateTime()))
+                    .orElseThrow();
 
-            for (SleepingSession session : sessions) {
-                if (session.getStartDateTime().compareTo(firstSession.getStartDateTime()) < 0) {
-                    firstSession = session;
-                }
-                if (session.getEndDateTime().compareTo(lastSession.getEndDateTime()) > 0) {
-                    lastSession = session;
-                }
-            }
+            SleepingSession lastSession = sessions.stream()
+                    .max((s1, s2) -> s1.getEndDateTime().compareTo(s2.getEndDateTime()))
+                    .orElseThrow();
 
             LocalDate firstNight = determineFirstNight(firstSession);
             LocalDate lastNight = determineLastNight(lastSession);
 
-            Set<LocalDate> nightsWithSleep = new HashSet<>();
-            for (SleepingSession session : sessions) {
-                List<LocalDate> nights = getNightsCoveredBySession(session);
-                nightsWithSleep.addAll(nights);
-            }
+            Set<LocalDate> nightsWithSleep = sessions.stream()
+                    .flatMap(session -> getNightsCoveredBySession(session).stream())
+                    .collect(Collectors.toSet());
 
             long totalNights = java.time.temporal.ChronoUnit.DAYS.between(firstNight, lastNight) + 1;
 
-            long nightsWithSleepInRange = 0;
-            for (LocalDate night : nightsWithSleep) {
-                if (!night.isBefore(firstNight) && !night.isAfter(lastNight)) {
-                    nightsWithSleepInRange++;
-                }
-            }
+            long nightsWithSleepInRange = nightsWithSleep.stream()
+                    .filter(night -> !night.isBefore(firstNight) && !night.isAfter(lastNight))
+                    .count();
 
             long sleeplessNights = totalNights - nightsWithSleepInRange;
 
@@ -396,31 +366,25 @@ public class SleepTrackerApp {
                 return new SleepAnalysisResult("Хронотип пользователя", Chronotype.PIGEON.getDisplayName());
             }
 
-            List<SleepingSession> nightSessions = new ArrayList<>();
-            for (SleepingSession session : sessions) {
-                if (isNightSession(session)) {
-                    nightSessions.add(session);
-                }
-            }
+            List<SleepingSession> nightSessions = sessions.stream()
+                    .filter(this::isNightSession)
+                    .collect(Collectors.toList());
 
             if (nightSessions.isEmpty()) {
                 return new SleepAnalysisResult("Хронотип пользователя", Chronotype.PIGEON.getDisplayName());
             }
 
-            long owlCount = 0;
-            long larkCount = 0;
-            long pigeonCount = 0;
+            long owlCount = nightSessions.stream()
+                    .filter(session -> classifyNight(session) == Chronotype.OWL)
+                    .count();
 
-            for (SleepingSession session : nightSessions) {
-                Chronotype type = classifyNight(session);
-                if (type == Chronotype.OWL) {
-                    owlCount++;
-                } else if (type == Chronotype.LARK) {
-                    larkCount++;
-                } else {
-                    pigeonCount++;
-                }
-            }
+            long larkCount = nightSessions.stream()
+                    .filter(session -> classifyNight(session) == Chronotype.LARK)
+                    .count();
+
+            long pigeonCount = nightSessions.stream()
+                    .filter(session -> classifyNight(session) == Chronotype.PIGEON)
+                    .count();
 
             String resultDisplayName;
             if (owlCount > larkCount && owlCount > pigeonCount) {
